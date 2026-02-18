@@ -44,9 +44,8 @@ df_reshaped = df_reshaped.sort_values(by="year", ascending=False)
 
 # Display the data as a table using `st.dataframe`.
 st.dataframe(
-    df_reshaped,
+    df_reshaped.style.format("${:,.0f}"),
     use_container_width=True,
-    column_config={"year": st.column_config.TextColumn("Year")},
 )
 
 # Display the data as an Altair chart using `st.altair_chart`.
