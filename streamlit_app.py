@@ -35,6 +35,7 @@ def load_usd_to_eur_rate():
 
 
 df = load_data()
+currency = st.sidebar.selectbox("Currency", ["USD", "EUR"], index=1)
 fallback_usd_to_eur_rate = st.sidebar.number_input(
     "Fallback USD to EUR rate",
     min_value=0.1,
@@ -67,26 +68,33 @@ df_reshaped = df_filtered.pivot_table(
     index="year", columns="genre", values="gross", aggfunc="sum", fill_value=0
 )
 df_reshaped = df_reshaped.sort_values(by="year", ascending=False)
-df_reshaped_eur = df_reshaped * usd_to_eur_rate
 
-st.caption(f"Exchange rate used: 1 USD = {usd_to_eur_rate:.4f} EUR (as of {fx_date})")
+if currency == "EUR":
+    df_display = df_reshaped * usd_to_eur_rate
+    table_number_format = "EUR {:,.0f}"
+    chart_axis_title = "Gross earnings (EUR)"
+    st.caption(f"Exchange rate used: 1 USD = {usd_to_eur_rate:.4f} EUR (as of {fx_date})")
+else:
+    df_display = df_reshaped
+    table_number_format = "$ {:,.0f}"
+    chart_axis_title = "Gross earnings (USD)"
 
 # Display the data as a table using `st.dataframe`.
 st.dataframe(
-    df_reshaped_eur.style.format("EUR {:,.0f}"),
+    df_display.style.format(table_number_format),
     use_container_width=True,
 )
 
 # Display the data as an Altair chart using `st.altair_chart`.
 df_chart = pd.melt(
-    df_reshaped_eur.reset_index(), id_vars="year", var_name="genre", value_name="gross"
+    df_display.reset_index(), id_vars="year", var_name="genre", value_name="gross"
 )
 chart = (
     alt.Chart(df_chart)
     .mark_line()
     .encode(
         x=alt.X("year:N", title="Year"),
-        y=alt.Y("gross:Q", title="Gross earnings (EUR)"),
+        y=alt.Y("gross:Q", title=chart_axis_title),
         color="genre:N",
     )
     .properties(height=320)
