@@ -35,11 +35,21 @@ def load_usd_to_eur_rate():
 
 
 df = load_data()
+fallback_usd_to_eur_rate = st.sidebar.number_input(
+    "Fallback USD to EUR rate",
+    min_value=0.1,
+    max_value=2.0,
+    value=0.92,
+    step=0.0001,
+    format="%.4f",
+)
+
 try:
     usd_to_eur_rate, fx_date = load_usd_to_eur_rate()
 except (error.URLError, TimeoutError, KeyError, ValueError, json.JSONDecodeError):
-    st.error("Could not load a live USD to EUR exchange rate. Please try again.")
-    st.stop()
+    usd_to_eur_rate = fallback_usd_to_eur_rate
+    fx_date = "fallback/manual"
+    st.warning("Live USD to EUR rate unavailable. Using fallback rate from sidebar.")
 
 # Show a multiselect widget with the genres using `st.multiselect`.
 genres = st.multiselect(
