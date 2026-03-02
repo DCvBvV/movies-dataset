@@ -71,8 +71,8 @@ df_reshaped = df_reshaped.sort_values(by="year", ascending=False)
 
 if currency == "EUR":
     df_display = df_reshaped * usd_to_eur_rate
-    table_number_format = "EUR {:,.0f}"
-    chart_axis_title = "Gross earnings (EUR)"
+    table_number_format = "€ {:,.0f}"
+    chart_axis_title = "Gross earnings (€)"
     st.caption(f"Exchange rate used: 1 USD = {usd_to_eur_rate:.4f} EUR (as of {fx_date})")
 else:
     df_display = df_reshaped
