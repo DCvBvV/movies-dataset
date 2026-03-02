@@ -132,7 +132,7 @@ chart = (
     alt.Chart(df_chart)
     .mark_line()
     .encode(
-        x=alt.X("year:Q", title="Year"),
+        x=alt.X("year:Q", title="Year", axis=alt.Axis(format="d")),
         y=alt.Y("gross:Q", title=chart_axis_title),
         color="genre:N",
     )
