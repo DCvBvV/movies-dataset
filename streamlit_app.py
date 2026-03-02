@@ -23,6 +23,10 @@ def load_data():
     df = pd.read_csv("data/movies_genres_summary.csv")
     return df
 
+@st.cache_data
+def load_cpi_data():
+    return pd.read_csv("data/us_cpi_u_annual.csv").set_index("year")["cpi"]
+
 @st.cache_data(ttl=60 * 60 * 12)
 def load_usd_to_eur_rate():
     """Fetch the latest USD -> EUR rate from Frankfurter (ECB reference rates)."""
@@ -35,7 +39,20 @@ def load_usd_to_eur_rate():
 
 
 df = load_data()
+min_year = int(df["year"].min())
+max_year = int(df["year"].max())
+default_start_year = max(min_year, 2000)
+default_end_year = min(max_year, 2016)
+if default_start_year > default_end_year:
+    default_start_year = min_year
+    default_end_year = max_year
+
 currency = st.sidebar.selectbox("Currency", ["USD", "EUR"], index=1)
+show_inflation_index = st.sidebar.toggle(
+    "Inflation-adjusted index",
+    value=False,
+    help="Correct values using annual U.S. CPI-U data and rebase each genre to 100 in the selected start year.",
+)
 fallback_usd_to_eur_rate = st.sidebar.number_input(
     "Fallback USD to EUR rate",
     min_value=0.1,
@@ -60,28 +77,50 @@ genres = st.multiselect(
 )
 
 # Show a slider widget with the years using `st.slider`.
-years = st.slider("Years", 1986, 2006, (2000, 2016))
+years = st.slider("Years", min_year, max_year, (default_start_year, default_end_year))
 
 # Filter the dataframe based on the widget input and reshape it.
 df_filtered = df[(df["genre"].isin(genres)) & (df["year"].between(years[0], years[1]))]
 df_reshaped = df_filtered.pivot_table(
     index="year", columns="genre", values="gross", aggfunc="sum", fill_value=0
 )
-df_reshaped = df_reshaped.sort_values(by="year", ascending=False)
+df_reshaped = df_reshaped.reindex(range(years[0], years[1] + 1), fill_value=0)
 
-if currency == "EUR":
-    df_display = df_reshaped * usd_to_eur_rate
-    table_number_format = "€ {:,.0f}"
-    chart_axis_title = "Gross earnings (€)"
-    st.caption(f"Exchange rate used: 1 USD = {usd_to_eur_rate:.4f} EUR (as of {fx_date})")
+if show_inflation_index:
+    cpi_by_year = load_cpi_data()
+    selected_cpi = cpi_by_year.reindex(df_reshaped.index)
+    base_year = years[0]
+    base_cpi = cpi_by_year.loc[base_year]
+    df_inflation_adjusted = df_reshaped.mul(base_cpi / selected_cpi, axis=0)
+    base_values = df_inflation_adjusted.loc[base_year].replace(0, pd.NA)
+    missing_base_genres = base_values[base_values.isna()].index.tolist()
+    df_display = df_inflation_adjusted.div(base_values, axis=1) * 100
+    table_number_format = "{:,.1f}"
+    chart_axis_title = f"Inflation-adjusted gross earnings index ({base_year} = 100)"
+    st.caption(
+        "Inflation adjustment uses annual U.S. CPI-U averages from the U.S. Bureau of Labor Statistics."
+    )
+    if missing_base_genres:
+        st.warning(
+            "Index values are unavailable for genres with no gross earnings in the selected start year: "
+            + ", ".join(missing_base_genres)
+        )
 else:
-    df_display = df_reshaped
-    table_number_format = "$ {:,.0f}"
-    chart_axis_title = "Gross earnings (USD)"
+    if currency == "EUR":
+        df_display = df_reshaped * usd_to_eur_rate
+        table_number_format = "€ {:,.0f}"
+        chart_axis_title = "Gross earnings (€)"
+        st.caption(f"Exchange rate used: 1 USD = {usd_to_eur_rate:.4f} EUR (as of {fx_date})")
+    else:
+        df_display = df_reshaped
+        table_number_format = "$ {:,.0f}"
+        chart_axis_title = "Gross earnings (USD)"
+
+df_table = df_display.sort_index(ascending=False)
 
 # Display the data as a table using `st.dataframe`.
 st.dataframe(
-    df_display.style.format(table_number_format),
+    df_table.style.format(table_number_format, na_rep="n/a"),
     use_container_width=True,
 )
 
@@ -93,7 +132,7 @@ chart = (
     alt.Chart(df_chart)
     .mark_line()
     .encode(
-        x=alt.X("year:N", title="Year"),
+        x=alt.X("year:Q", title="Year"),
         y=alt.Y("gross:Q", title=chart_axis_title),
         color="genre:N",
     )
